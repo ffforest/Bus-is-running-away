@@ -2,9 +2,7 @@
 
 #include "command.h"
 #include "command-internals.h"
-
 #include <error.h>
-
 /* FIXME: You may need to add #include directives, macro definitions,
  static function definitions, etc.  */
 #include <stdio.h>
@@ -12,7 +10,6 @@
 #include <stdbool.h>
 #include <string.h>
 #include <ctype.h>
-#include <unistd.h>
 #include "alloc.h"
 
 
@@ -639,7 +636,7 @@ command_stream_t make_command_stream (int (*get_next_byte) (void *), void *get_n
 				}
 				command_t command = makeTree(headDummy->next);
 				if(command != NULL) {
-					commandStreamDequeue(commandstream, command);
+					commandStreamPush(commandstream, command);
 					token_t curr = headDummy->next;
 					while(curr != NULL) {
 						token_t tempToken = curr;
