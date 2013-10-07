@@ -126,148 +126,164 @@ char* getLine(int (*get_next_byte) (void *), void* get_next_byte_argument) {
 }
 
 //This function accepts a simple command in string format, parses it, then creates a simple command and updates the corresponding attributes of it
-simple_command_t parseSimpleCommand (char* simpleCommandString)
-{
-    simple_command_t t = (simple_command_t)checked_malloc(sizeof(struct simple_command));
-    //p is the iterator, set it at the beginning of the string
-    char* p = simpleCommandString;
-    int start_pos = 0;
-    
-    int word_found = 0;
-    
-    //return if empty string
-    if(*p=='\0')
-        return NULL;
-    
-    //If there are both input and output redirections, i.e. '<' and '>', the '>' must be on the right, as indicated in the spec
-    if((strchr(simpleCommandString, '>') < strchr(simpleCommandString, '<')) && strchr(simpleCommandString, '<') != NULL && strchr(simpleCommandString, '>') != NULL)
+simple_command_t parseSimpleCommand (char* simpleCommandString) {
+	const char* lp;
+	int start = 0;
+	int running_alpha = 0;
+	bool found_word = false;
+	simple_command_t simp_command = (simple_command_t) checked_malloc(sizeof(struct simple_command));
+	lp = simpleCommandString;
+
+	/* check for mismatched ordering of I/O */
+	if(strchr(simpleCommandString, '<') != NULL && strchr(simpleCommandString, '>') != NULL 
+		&& (strchr(simpleCommandString, '<') > strchr(simpleCommandString, '>')))
 		return NULL;
-    
-    //if the first character is not a character listed above in is_char() function, return NULL
-	if(!is_char(*p))
+
+	/* Skip leading whitespace characters (use ctype.h)*/
+	while(isspace((int)*lp)) {
+		lp++;
+		start++;
+	}
+
+	if(!*lp)
 		return NULL;
-    
-    //if there are spaces at the beginning, skip them
-    //start_pos is where the word starts
-    while(isspace(*p))
-    {
-		p++;
-		start_pos++;
-	}
-    
-    const int MAX_WORD = 16;
-	int initialsize = MAX_WORD*sizeof(char*);
-	char** word = (char**)checked_malloc(initialsize);
-	int num_words = 0;
-    
-	int word_start_index = start_pos;
-    int word_end_index = word_start_index;
-	int isInWord = 0;
-	while(*p != '\0' && (*p != '<' && *p != '>'))
-    {
-        word_found = 1;
-		if(is_char(*p))
-        {
-			if(isInWord != 0)
-            {
-				isInWord = 1;
-				word_start_index = p - simpleCommandString;
-			}
-			word_end_index = p - simpleCommandString;
-		}
-        else if(isspace(*p) && isInWord)
-        {
-			isInWord = 0;
-			if(num_words == MAX_WORD)
-            {
-				initialsize *= 2;
-				word = (char**)checked_realloc((void*)word, initialsize);
-			}
-			word[num_words] = substr(word_start_index, word_end_index, simpleCommandString);
-			num_words++;
-		}
-		p++;
-	}
-    if(isInWord)
-    {
-		if(num_words == MAX_WORD)
-			word = (char**) checked_realloc((void*) word, 2*initialsize);
-		word[num_words] = substr(word_start_index, word_end_index, simpleCommandString);
-		num_words++;
-	}
-	word[num_words] = '\0';
+
+	/* if first non-whitespace character is not part of the word set it is invalid input. return null. */
+	if(!is_char(*lp)) 	
+		return NULL;
+
+	/* found a word for the command string */
+	found_word = true;
 	
-    t->command = word;
-	t->input = NULL;
-    t->output = NULL;
-    
-    //return the object simple_command
-	if(*p == '\0' && word_found == 1)
-		return t;
-    
-	//looking for input and output
-    word_found = 0;
-	if(*p == '<')
-    {
-        p++;
-		word_start_index = p - simpleCommandString;
-		while(isspace((int)*p))
-        {
-			p++;
-			word_start_index++;
+	int wordLimit = 5;
+	char** wordList = (char**) checked_malloc(wordLimit*sizeof(char*)+1);
+	int nWords = 0;
+	int running_start = start;
+	bool inWord = false;
+	/* Found the command string */
+	while(*lp != '\0' && !strchr("<>", *lp)){
+		if(is_char(*lp)) {
+			if(!inWord){
+				inWord = true;
+				running_start = lp - simpleCommandString;
+			}
+			running_alpha = lp - simpleCommandString;
+		} else if(isspace(*lp) && inWord) {
+			inWord = false;
+			if(nWords == wordLimit) {
+				wordLimit = 2*wordLimit;
+				wordList = (char**) checked_realloc((void*) wordList, wordLimit+1);
+			}
+			wordList[nWords] = substr(running_start, running_alpha, simpleCommandString);
+			nWords++;
 		}
-		if(*p=='\0')
-			return NULL;
-		if(!is_char(*p))
-			return NULL;
-        while(*p != '\0' && *p != '>')
-        {
-            word_found = 1;
-			if(is_char(*p))
-				word_end_index = p - simpleCommandString;
-			p++;
-        }
-        //set the input of the simple command
-		t->input = substr(word_start_index, word_end_index, simpleCommandString);
-        
-        //if there's space in the filename, return NULL
-		if(t->input != NULL && is_space(t->input))
-			return NULL;
-		else if(*p == '\0' && word_found == 1)
-			return t;
+		lp++;
 	}
-    
-    //looking for input and output
-    word_found = 0;
-    if(*p == '>')
-    {
-		p++;
-		word_start_index = p - simpleCommandString;
-		while(isspace((int)*p))
-        {
-			p++;
-			word_start_index++;
+	
+	if(inWord) {
+		if(nWords == wordLimit) {
+			wordList = (char**) checked_realloc((void*) wordList, 2*wordLimit+1);
 		}
-		if(*p=='\0')
-			return NULL;
-		if(!is_char(*p))
-			return NULL;
-		while(*p != '\0' && *p != '>')
-        {
-            word_found = 1;
-			if(is_char(*p))
-				word_end_index = p - simpleCommandString;
-			p++;
-		}
-        //set the input of the simple command
-		t->output = substr(word_start_index, word_end_index, simpleCommandString);
-        //return NULL if there's space in filename
-        if(t->output != NULL && is_space(t->output))
-			return NULL;
-		else if(*p == '\0' && word_found == 1)
-			return t;
+		wordList[nWords] = substr(running_start, running_alpha, simpleCommandString);
+		nWords++;
 	}
-    return NULL;
+	wordList[nWords] = '\0';
+	
+	
+	/* update simple command with command string */
+	simp_command->command = wordList;	
+	//simp_command->command = substr(start, running_alpha, simpleCommandString,);
+	simp_command->input = simp_command->output = NULL;
+
+	/* check if done */
+	if(!*lp && found_word)
+		return simp_command;
+
+	/* reset found word for the input and/or output */
+	found_word = false;
+
+	/* it must be either < or > if not done*/
+	
+	/* look for input */
+	if(strchr("<", *lp)) {
+		lp++;
+		start = lp - simpleCommandString;
+		/* Skip leading whitespace characters */
+		while(isspace((int)*lp)) {
+			lp++;
+			start++;
+		}
+		if(!*lp)
+			return NULL;
+		/* if first non-whitespace character is not part of the word set it is invalid input. return null. */
+		if(!is_char(*lp)) 	
+			return NULL;
+		
+		found_word = true;
+
+		/* Found the input string */
+		while(*lp != '\0' && !strchr(">", *lp)){
+			//lp++;
+			//start++;
+			if(is_char(*lp)) {
+				running_alpha = lp - simpleCommandString;
+			}
+			lp++;
+		}
+		
+		/* update simple command with input string */
+		simp_command->input = substr(start, running_alpha,simpleCommandString);
+
+		/* check if done */
+		// Check if there are any invalid characters in file name
+		if(simp_command->input != NULL && is_space(simp_command->input))
+			return NULL;
+		else if(!*lp  && found_word)
+			return simp_command;
+	}
+
+	/* reset found word flag */
+	found_word = false;
+
+	/* look for output */
+	if(strchr(">", *lp)) {
+		lp++;
+		start = lp - simpleCommandString;
+		/* Skip leading whitespace characters */
+		while(isspace((int)*lp)) {
+			lp++;
+			start++;
+		}
+		if(!*lp)
+			return NULL;
+		/* if first non-whitespace character is not part of the word set it is invalid input. return null. */
+		if(!is_char(*lp)) 	
+			return NULL;
+		
+		found_word = true;
+
+		/* Found the output string */
+		while(*lp != '\0' && !strchr(">", *lp)){
+			//lp++;
+			//start++;
+			if(is_char(*lp)) {
+				running_alpha = lp - simpleCommandString;
+			}
+			lp++;
+		}
+		
+		/* update simple command with input string */
+		simp_command->output = substr(start, running_alpha,simpleCommandString);
+
+		/* check if done */
+		// Check if there are any invalid characters in file name
+		if(simp_command->output != NULL && is_space(simp_command->output))
+			return NULL;
+		else if(!*lp  && found_word)
+			return simp_command;
+	}	
+
+	return NULL;
 }
 
 token_t createSimpleCommandToken(char* string, int start, int end) {
