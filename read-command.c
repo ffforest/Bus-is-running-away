@@ -441,7 +441,7 @@ command_stream_t createCommandStream(void)
 	return stream;
 }
 
-void commandStreamEnqueue(command_stream_t stream, command_t data) 
+void commandStreamPush(command_stream_t stream, command_t data) 
 {
 	if((stream->tail) > (stream->limit))
 	{
@@ -452,7 +452,7 @@ void commandStreamEnqueue(command_stream_t stream, command_t data)
 	stream->tail++;
 }
 
-command_t commandStreamDequeue(command_stream_t stream) 
+command_t commandStreamPop(command_stream_t stream) 
 {
 	if (stream->tail <= stream->head)
 		return NULL;
@@ -606,7 +606,7 @@ command_stream_t make_command_stream (int (*get_next_byte) (void *), void *get_n
 					}
 					command_t command = makeTree(headDummy->next);
 					if(command != NULL) {
-						commandStreamEnqueue(commandstream, command);
+						commandStreamPush(commandstream, command);
 						token_t curr = headDummy->next;
 						while(curr != NULL) {
 							token_t tempToken = curr;
@@ -639,7 +639,7 @@ command_stream_t make_command_stream (int (*get_next_byte) (void *), void *get_n
 				}
 				command_t command = makeTree(headDummy->next);
 				if(command != NULL) {
-					commandStreamEnqueue(commandstream, command);
+					commandStreamDequeue(commandstream, command);
 					token_t curr = headDummy->next;
 					while(curr != NULL) {
 						token_t tempToken = curr;
@@ -669,5 +669,5 @@ command_stream_t make_command_stream (int (*get_next_byte) (void *), void *get_n
 }
 
 command_t read_command_stream (command_stream_t stream) {
-	return commandStreamDequeue(stream);
+	return commandStreamPop(stream);
 }
