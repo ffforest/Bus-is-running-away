@@ -89,7 +89,7 @@ command_t stackNodePop(stack_node_t* head)
     if(head == NULL || *head == NULL)
         return NULL;
     command_t cmd = (*head)->data;
-    stack_node_t temp = *head;
+    stack_node_t temp = (*head);
     *head=(*head)->next;
     free(temp);
     return cmd;
@@ -97,8 +97,8 @@ command_t stackNodePop(stack_node_t* head)
 
 char* getLine(int (*get_next_byte) (void *), void* get_next_byte_argument) {
 	
-	char* buffer = (char*) checked_malloc(25*sizeof(char));
-	size_t bufferLimit = 25;
+	char* buffer = (char*) checked_malloc(50*sizeof(char));
+	size_t buffersize = 50;
 	unsigned int i = 0;
     
 	int byte = (*get_next_byte) (get_next_byte_argument);
@@ -107,15 +107,16 @@ char* getLine(int (*get_next_byte) (void *), void* get_next_byte_argument) {
 	if(byte < 0)
 		return NULL;
     
-	while(1) {
+	for(;;)
+	{
 		
 		if(byte < 0 || (c = (char) byte) == '\n' ) {
 			buffer[i] = '\0';
 			return buffer;
 		}
-		if(i + 1 >= bufferLimit) {
-			bufferLimit *= 2;
-			buffer = (char*) checked_realloc((void*) buffer, bufferLimit);
+		if(i + 1 >= buffersize) {
+			buffersize += 50;
+			buffer = (char*) checked_realloc((void*) buffer, buffersize);
 		}
 		buffer[i] = c;
 		i++;
@@ -123,148 +124,165 @@ char* getLine(int (*get_next_byte) (void *), void* get_next_byte_argument) {
 	}
 }
 
-simple_command_t parseSimpleCommand (char* simpleCommandString)
-{
-    simple_command_t t = (simple_command_t)checked_malloc(sizeof(struct simple_command));
-    //p is the iterator, set it at the beginning of the string
-    char* p = simpleCommandString;
-    int start_pos = 0;
-    
-    int word_found = 0;
-    
-    //return if empty string
-    if(*p=='\0')
-    return NULL;
-    
-    //If there are both input and output redirections, i.e. '<' and '>', the '>' must be on the right, as indicated in the spec
-    if((strchr(simpleCommandString, '>') < strchr(simpleCommandString, '<')) && strchr(simpleCommandString, '<') != NULL && strchr(simpleCommandString, '>') != NULL)
-	return NULL;
-    
-    //if the first character is not a character listed above in is_char() function, return NULL
-    if(!is_char(*p))
-	return NULL;
-    
-    //if there are spaces at the beginning, skip them
-    //start_pos is where the word starts
-    	while(isspace(*p))
-	{
-		p++;
-		start_pos++;
-   	}
-    
-        const int MAX_WORD = 16;
-	int initialsize = MAX_WORD*sizeof(char*);
-	char** word = (char**)checked_malloc(initialsize);
-	int num_words = 0;
-    
-	int word_start_index = start_pos;
-        int word_end_index = word_start_index;
-	int isInWord = 0;
-	while(*p != '\0' && (*p != '<' && *p != '>'))
-        {
-        	word_found = 1;
-		if(is_char(*p))
-        	{
-			if(isInWord == 0)
-            		{
-				isInWord = 1;
-				word_start_index = p - simpleCommandString;
-			}
-			word_end_index = p - simpleCommandString;
-		}
-        	else if(isspace(*p) && isInWord)
-        	{
-			isInWord = 0;
-			if(num_words == MAX_WORD)
-            		{
-				initialsize *= 2;
-				word = (char**)checked_realloc((void*)word, initialsize);
-			}
-			word[num_words] = substr(word_start_index, word_end_index, simpleCommandString);
-			num_words++;
-		}
-		p++;
-	}
-    	if(isInWord)
-    	{
-		if(num_words == MAX_WORD)
-			word = (char**) checked_realloc((void*) word, 2*initialsize);
-		word[num_words] = substr(word_start_index, word_end_index, simpleCommandString);
-		num_words++;
-	}
-	word[num_words] = '\0';
-	
-    	t->command = word;
-	t->input = NULL;
-    	t->output = NULL;
-    
-    //return the object simple_command
-    if(*p == '\0' && word_found == 1)
-		return t;
-    
-    //looking for input and output
-    word_found = 0;
-	if(*p == '<')
-    {
-        p++;
-		word_start_index = p - simpleCommandString;
-		while(isspace((int)*p))
-        {
-			p++;
-			word_start_index++;
-		}
-		if(*p=='\0')
-			return NULL;
-		if(!is_char(*p))
-			return NULL;
-        while(*p != '\0' && *p != '>')
-        {
-        	word_found = 1;
-		if(is_char(*p))
-			word_end_index = p - simpleCommandString;
-		p++;
-        }
-        //set the input of the simple command
-	t->input = substr(word_start_index, word_end_index, simpleCommandString);
-        
-        //if there's space in the filename, return NULL
-	if(t->input != NULL && is_space(t->input))
+//This function accepts a simple command in string format, parses it, then creates a simple command and updates the corresponding attributes of it
+simple_command_t parseSimpleCommand (char* simpleCommandString) {
+	const char* lp;
+	int start = 0;
+	int running_alpha = 0;
+	bool found_word = false;
+	simple_command_t simp_command = (simple_command_t) checked_malloc(sizeof(struct simple_command));
+	lp = simpleCommandString;
+
+	/* check for mismatched ordering of I/O */
+	if(strchr(simpleCommandString, '<') != NULL && strchr(simpleCommandString, '>') != NULL 
+		&& (strchr(simpleCommandString, '<') > strchr(simpleCommandString, '>')))
 		return NULL;
-	else if(*p == '\0' && word_found == 1)
-		return t;
-    }
-    
-    //looking for input and output
-    word_found = 0;
-    if(*p == '>')
-    {
-		p++;
-		word_start_index = p - simpleCommandString;
-		while(isspace((int)*p))
-        {
-			p++;
-			word_start_index++;
-		}
-		if(*p=='\0')
-			return NULL;
-		if(!is_char(*p))
-			return NULL;
-		while(*p != '\0' && *p != '>')
-        {
-            word_found = 1;
-			if(is_char(*p))
-				word_end_index = p - simpleCommandString;
-			p++;
-		}
-        //set the input of the simple command
-		t->output = substr(word_start_index, word_end_index, simpleCommandString);
-        //return NULL if there's space in filename
-        if(t->output != NULL && is_space(t->output))
-			return NULL;
-		else if(*p == '\0' && word_found == 1)
-			return t;
+
+	/* Skip leading whitespace characters (use ctype.h)*/
+	while(isspace((int)*lp)) {
+		lp++;
+		start++;
 	}
-    return NULL;
+
+	if(!*lp)
+		return NULL;
+
+	/* if first non-whitespace character is not part of the word set it is invalid input. return null. */
+	if(!is_char(*lp)) 	
+		return NULL;
+
+	/* found a word for the command string */
+	found_word = true;
+	
+	int wordLimit = 5;
+	char** wordList = (char**) checked_malloc(wordLimit*sizeof(char*)+1);
+	int nWords = 0;
+	int running_start = start;
+	bool inWord = false;
+	/* Found the command string */
+	while(*lp != '\0' && !strchr("<>", *lp)){
+		if(is_char(*lp)) {
+			if(!inWord){
+				inWord = true;
+				running_start = lp - simpleCommandString;
+			}
+			running_alpha = lp - simpleCommandString;
+		} else if(isspace(*lp) && inWord) {
+			inWord = false;
+			if(nWords == wordLimit) {
+				wordLimit = 2*wordLimit;
+				wordList = (char**) checked_realloc((void*) wordList, wordLimit+1);
+			}
+			wordList[nWords] = substr(running_start, running_alpha, simpleCommandString);
+			nWords++;
+		}
+		lp++;
+	}
+	
+	if(inWord) {
+		if(nWords == wordLimit) {
+			wordList = (char**) checked_realloc((void*) wordList, 2*wordLimit+1);
+		}
+		wordList[nWords] = substr(running_start, running_alpha, simpleCommandString);
+		nWords++;
+	}
+	wordList[nWords] = '\0';
+	
+	
+	/* update simple command with command string */
+	simp_command->command = wordList;	
+	//simp_command->command = substr(start, running_alpha, simpleCommandString,);
+	simp_command->input = simp_command->output = NULL;
+
+	/* check if done */
+	if(!*lp && found_word)
+		return simp_command;
+
+	/* reset found word for the input and/or output */
+	found_word = false;
+
+	/* it must be either < or > if not done*/
+	
+	/* look for input */
+	if(strchr("<", *lp)) {
+		lp++;
+		start = lp - simpleCommandString;
+		/* Skip leading whitespace characters */
+		while(isspace((int)*lp)) {
+			lp++;
+			start++;
+		}
+		if(!*lp)
+			return NULL;
+		/* if first non-whitespace character is not part of the word set it is invalid input. return null. */
+		if(!is_char(*lp)) 	
+			return NULL;
+		
+		found_word = true;
+
+		/* Found the input string */
+		while(*lp != '\0' && !strchr(">", *lp)){
+			//lp++;
+			//start++;
+			if(is_char(*lp)) {
+				running_alpha = lp - simpleCommandString;
+			}
+			lp++;
+		}
+		
+		/* update simple command with input string */
+		simp_command->input = substr(start, running_alpha,simpleCommandString);
+
+		/* check if done */
+		// Check if there are any invalid characters in file name
+		if(simp_command->input != NULL && is_space(simp_command->input))
+			return NULL;
+		else if(!*lp  && found_word)
+			return simp_command;
+	}
+
+	/* reset found word flag */
+	found_word = false;
+
+	/* look for output */
+	if(strchr(">", *lp)) {
+		lp++;
+		start = lp - simpleCommandString;
+		/* Skip leading whitespace characters */
+		while(isspace((int)*lp)) {
+			lp++;
+			start++;
+		}
+		if(!*lp)
+			return NULL;
+		/* if first non-whitespace character is not part of the word set it is invalid input. return null. */
+		if(!is_char(*lp)) 	
+			return NULL;
+		
+		found_word = true;
+
+		/* Found the output string */
+		while(*lp != '\0' && !strchr(">", *lp)){
+			//lp++;
+			//start++;
+			if(is_char(*lp)) {
+				running_alpha = lp - simpleCommandString;
+			}
+			lp++;
+		}
+		
+		/* update simple command with input string */
+		simp_command->output = substr(start, running_alpha,simpleCommandString);
+
+		/* check if done */
+		// Check if there are any invalid characters in file name
+		if(simp_command->output != NULL && is_space(simp_command->output))
+			return NULL;
+		else if(!*lp  && found_word)
+			return simp_command;
+	}	
+
+	return NULL;
 }
 
 token_t createSimpleCommandToken(char* string, int start, int end) {
@@ -281,74 +299,61 @@ token_t createSimpleCommandToken(char* string, int start, int end) {
 }
 
 
-command_t makeTree(token_t head) {
-    
-    //create two command stacks, one for operators, one for operands
+command_t makeTree(token_t head) 
+{
 	stack_node_t operandTop = NULL;
 	stack_node_t operatorTop = NULL;
 	
-	if(head == NULL) {
+	if(head == NULL) 
+	{
 		return NULL;
 	}
     
-	//for each item in the expression:
 	while (head)
 	{
-		//  if the item is a simple command
-		if(head->type == simple_command) {
-			//    create a command object
+		if(head->type == simple_command) 
+		{
 			command_t operand = (command_t) checked_malloc(sizeof(struct command));
-			//    set its type to SIMPLE_COMMAND
 			operand->type = SIMPLE_COMMAND;
-			//    set "word" to the command string
 			operand->u.word = head->command->command;
-			//    set input and output
 			operand->input = head->command->input;
 			operand->output = head->command->output;
-			//    push it on the operand stack
 			stackNodePush(&operandTop, operand);
-			//    move to next token_t
-			//head = head->next;
-		} else if(head->type == close_paren) {
-			//too many close_parens
+		} else if(head->type == close_paren) 
+		{
 			return NULL;
 		}
-		//  if the item is an open parenthesis
-		else if(head->type == open_paren){
-			//    create a token list, which goes from the open parenthesis to the corresponding closed parenthesis (non-inclusive)
-			//	have a running parentheses count to figure out corresponding closed paren
+
+		else if(head->type == open_paren)
+		{
 			int paren_count = 1;
-			//	start the subshell list at the first token after the open_paren
-			//token_list_t tl = new_list();
-			//	advance list pointer past open_paren
+
 			token_t endList = head;
 			head = head->next;
 			token_t startList = head;
-			while(head != NULL) {
+			while(head != NULL) 
+			{
 				if(head->type == open_paren)
 					paren_count++;
-				if(head->type == close_paren) {
+				if(head->type == close_paren) 
+				{
 					paren_count--;
-					if(paren_count == 0) {
+					if(paren_count == 0) 
+					{
 						endList->next = NULL;
 						break;
 					}
 				}
-				//add_to_list(tl, head);
 				
 				head = head->next;
 				endList = endList->next;
 			}
 			
-			if(paren_count != 0) {
-				//not enough close_parens
+			if(paren_count != 0) 
+			{
 				return NULL;
 			}
 			
-			//    call makeTree recursively with the token list as an argumen
-			//    create a command object
-			//    set its type to SUBSHELL_COMMAND
-			//    set subshell_command to point to the result of makeTree
 			command_t subShell = makeTree(startList);
 			
 			if(subShell != NULL) {
@@ -358,78 +363,81 @@ command_t makeTree(token_t head) {
 				stackNodePush(&operandTop, operand);
 			}
 			endList->next = head;
-			
-			//    set status
-            ////////////////////////	/*FLAG*/
-			//operand->status = -1;
-			//    push it on the operand stack
-            ////////////////////////	/*FLAG*/
-			
-			//free_list(tl);
 		}
-		//  if the item i is an operator (&&, ||, |, ;) and the operator stack is empty or the operator on the top of the stack is higher priority
-		else if((head->type == and || head->type == or || head->type == pipes || head->type == semicolon) && (operatorTop!=NULL && (operatorTop->data->type == PIPE_COMMAND || ((operatorTop->data->type == AND_COMMAND || operatorTop->data->type == OR_COMMAND) && head->type != pipes)) /*((operatorTop->data->type == PIPE_COMMAND && head->type != pipe) || (operatorTop->data->type != SEQUENCE_COMMAND && head->type == semicolon))*/)) {
-			//    pop an operator from the operator stack
+
+		else if((head->type == and || head->type == or || head->type == pipes || head->type == semicolon) && (operatorTop!=NULL && (operatorTop->data->type == PIPE_COMMAND || ((operatorTop->data->type == AND_COMMAND || operatorTop->data->type == OR_COMMAND) && head->type != pipes)))) 
+		{
+	
 			command_t operand = stackNodePop(&operatorTop);
-			//    pop two operands from the operand stack
-			//    set the operator's command[0] <- second operand, command[1] <- first operand
+
 			operand->u.command[1] = stackNodePop(&operandTop);
 			operand->u.command[0] = stackNodePop(&operandTop);
 			if(operand->u.command[1] == NULL || operand->u.command[0] == NULL) {
 				return NULL;
 			}
-			//    push the result on the operand stack
+
 			stackNodePush(&operandTop, operand);
-			//    push i on the operator stack
+
 			command_t operator = (command_t) checked_malloc(sizeof(struct command));
-			if(head->type == and)
-				operator->type = AND_COMMAND;
-			if(head->type == or)
-				operator->type = OR_COMMAND;
-			if(head->type == pipes)
-				operator->type = PIPE_COMMAND;
-			if(head->type == semicolon)
-				operator->type = SEQUENCE_COMMAND;
+			switch(head->type)
+			{
+				case and: 
+					operator->type = AND_COMMAND;
+					break;
+				case or:
+					operator->type = OR_COMMAND;
+					break;
+				case pipes:
+					operator->type = PIPE_COMMAND;
+					break;
+				case semicolon:
+					operator->type = SEQUENCE_COMMAND;
+					break;
+				default:
+					break;
+			}
 			stackNodePush(&operatorTop, operator);
 		}
-		//  else: (the item is an operator, and the operator stack is not empty, and the opeator on the top of the stack is lower priority)
 		else {
-			//    create a command object
-			//    set its type to the appropriate value
-			//    push it on the operator stack
+
 			command_t operator = (command_t) checked_malloc(sizeof(struct command));
-			if(head->type == and)
-				operator->type = AND_COMMAND;
-			if(head->type == or)
-				operator->type = OR_COMMAND;
-			if(head->type == pipes)
-				operator->type = PIPE_COMMAND;
-			if(head->type == semicolon)
-				operator->type = SEQUENCE_COMMAND;
+			switch(head->type)
+			{
+				case and: 
+					operator->type = AND_COMMAND;
+					break;
+				case or:
+					operator->type = OR_COMMAND;
+					break;
+				case pipes:
+					operator->type = PIPE_COMMAND;
+					break;
+				case semicolon:
+					operator->type = SEQUENCE_COMMAND;
+					break;
+				default:
+					break;
+			}
 			stackNodePush(&operatorTop, operator);
-			//while the operator stack is not empty
 		}
 		head = head->next;
 	}
-	while(operatorTop) {
-		//  pop an operator from the operator stack
+	while(operatorTop) 
+	{
 		command_t operator = stackNodePop(&operatorTop);
-		//  pop two operands from the oprand stack
-		//  set the operator's command[0] <- second operand, command[1] <- first operand
+
 		operator->u.command[1] = stackNodePop(&operandTop);
 		operator->u.command[0] = stackNodePop(&operandTop);
-		if(operator->u.command[1] == NULL || operator->u.command[0] == NULL) {
+		if(operator->u.command[1] == NULL || operator->u.command[0] == NULL) 
+		{
 			return NULL;
 		}
-		//  push the result on the operand stack
+
 		stackNodePush(&operandTop, operator);
 		
 		
 	}
-	//if we ever run out of items in the operand stack, then we dont have a valid input
-    
-	//if we have more than one item in the operand stack at the end, then we dont have a valid input
-    //return the single item in the operand stack (the head of the tree)
+
 	command_t tree_head = stackNodePop(&operandTop);
 	if(operandTop == NULL)
 		return tree_head;
@@ -438,41 +446,49 @@ command_t makeTree(token_t head) {
 }
 
 
-struct command_stream {
-	command_t data;
-	struct command_stream* next;
-	struct command_stream* prev;
+struct command_stream 
+{
+	command_t* data;
+	size_t head;
+	size_t tail;
+	size_t limit;
 };
 
-bool isEmpty(command_stream_t head) {
-	if(head->next == head)
+bool isEmpty(command_stream_t stream)  
+{
+	if(stream->head == stream->tail)		
 		return true;
 	return false;
 }
 
-command_stream_t createCommandStream(void) {
-	command_stream_t headDummy = (command_stream_t) checked_malloc(sizeof(struct command_stream));
-	headDummy->data = NULL;
-	headDummy->next = headDummy;
-	headDummy->prev = headDummy;
-	return headDummy;
+command_stream_t createCommandStream(void) 
+{
+	command_stream_t stream = (command_stream_t) checked_malloc(sizeof(struct command_stream));
+	stream->data = (command_t*)checked_malloc(50*sizeof(command_t));
+	stream->head = 0;
+	stream->tail = 0;
+	stream->limit = 50;
+	return stream;
 }
 
-void commandStreamEnqueue(command_stream_t queueHead, command_t data) {
-	command_stream_t newNode = (command_stream_t) checked_malloc(sizeof(struct command_stream));
-	newNode->data = data;
-	newNode->next = queueHead;
-	newNode->prev = queueHead->prev;
-	queueHead->prev->next = newNode;
-	queueHead->prev = newNode;
+void commandStreamEnqueue(command_stream_t stream, command_t data) 
+{
+	if((stream->tail) > (stream->limit))
+	{
+		stream->limit += 50;
+		stream->data = (command_t*)checked_realloc((void*) (stream->data), (stream->limit));
+	}
+	stream->data[stream->tail] = data;
+	stream->tail++;
 }
 
-command_t commandStreamDequeue(command_stream_t queueHead) {
-	command_stream_t next = queueHead->next;
-	queueHead->next->next->prev = queueHead;
-	queueHead->next = queueHead->next->next;
-	command_t data = next->data;
-	free(next);
+command_t commandStreamDequeue(command_stream_t stream) 
+{
+	if (stream->tail <= stream->head)
+		return NULL;
+	command_t data = stream->data[stream->head];
+	stream->head++;
+
 	return data;
 }
 
@@ -482,8 +498,8 @@ command_stream_t make_command_stream (int (*get_next_byte) (void *), void *get_n
 	headDummy->next = NULL;
 	token_t tail = headDummy;
     
-	command_stream_t commandStream = createCommandStream();
-	
+	command_stream_t commandstream = createCommandStream();
+
 	char* line = getLine(*get_next_byte, get_next_byte_argument);
 	int i = 0;
 	int startCommand = 0;
@@ -504,7 +520,6 @@ command_stream_t make_command_stream (int (*get_next_byte) (void *), void *get_n
 				i++;
 			} else if(c == '|') {
 				if(!inWord) {
-					//there has been no simple command, so fail
 					fprintf(stderr, "%d: No command given\n", lineNo);
 					exit(1);
 				}
@@ -574,8 +589,6 @@ command_stream_t make_command_stream (int (*get_next_byte) (void *), void *get_n
 				if(inWord) {
 					token_t sct = createSimpleCommandToken(line, startCommand, i-1);
 					if(sct == NULL) {
-						//fprintf(stderr, "%d: Invalid command\n", lineNo);
-						//exit(1);
 						tail->next = pToken;
 					} else {
 						sct->next = pToken;
@@ -589,8 +602,6 @@ command_stream_t make_command_stream (int (*get_next_byte) (void *), void *get_n
 				i++;
 				startCommand = i;
 			} else if(c == ';') {
-				//if not in parens: send everything to makeTree, nextLine is everything after ';' in this line, same lineno
-				//if in parens, then create a sequence token, continue with algo
 				if(parenDepth > 0) {
 					token_t sequenceToken = (token_t) checked_malloc(sizeof(struct token));
 					sequenceToken->type = semicolon;
@@ -623,14 +634,11 @@ command_stream_t make_command_stream (int (*get_next_byte) (void *), void *get_n
 							tail = sct;
 						}
 					}
-					command_t commandHead = makeTree(headDummy->next);
-					if(commandHead != NULL) {
-						commandStreamEnqueue(commandStream, commandHead);
+					command_t command = makeTree(headDummy->next);
+					if(command != NULL) {
+						commandStreamEnqueue(commandstream, command);
 						token_t curr = headDummy->next;
 						while(curr != NULL) {
-							if(curr->type == simple_command && curr->command != NULL) {
-								//free(curr->command);
-							}
 							token_t tempToken = curr;
 							curr = curr->next;
 							free(tempToken);
@@ -659,14 +667,11 @@ command_stream_t make_command_stream (int (*get_next_byte) (void *), void *get_n
 						inWord = false;
 					}
 				}
-				command_t commandHead = makeTree(headDummy->next);
-				if(commandHead != NULL) {
-					commandStreamEnqueue(commandStream, commandHead);
+				command_t command = makeTree(headDummy->next);
+				if(command != NULL) {
+					commandStreamEnqueue(commandstream, command);
 					token_t curr = headDummy->next;
 					while(curr != NULL) {
-						if(curr->type == simple_command && curr->command != NULL) {
-							//free(curr->command);
-						}
 						token_t tempToken = curr;
 						curr = curr->next;
 						free(tempToken);
@@ -686,11 +691,11 @@ command_stream_t make_command_stream (int (*get_next_byte) (void *), void *get_n
 		line = getLine(*get_next_byte, get_next_byte_argument);
 		lineNo++;
 	}
-	if(isEmpty(commandStream)) {
+	if(isEmpty(commandstream)) {
 		fprintf(stderr, "%d: Invalid structure\n", lineNo);
 		exit(1);
 	}
-	return commandStream;
+	return commandstream;
 }
 
 command_t read_command_stream (command_stream_t stream) {
