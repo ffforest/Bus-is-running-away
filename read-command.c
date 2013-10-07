@@ -165,7 +165,7 @@ simple_command_t parseSimpleCommand (char* simpleCommandString)
         	word_found = 1;
 		if(is_char(*p))
         	{
-			if(isInWord != 0)
+			if(isInWord == 0)
             		{
 				isInWord = 1;
 				word_start_index = p - simpleCommandString;
